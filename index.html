@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Квинкункс">
+  <meta name="theme-color" content="#1a1a2e">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <title>Треугольный Квинкункс</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #1a1a2e;
+      --panel: #16213e;
+      --accent: #e94560;
+      --gold: #f5a623;
+      --green: #0f9b58;
+      --text: #eaeaea;
+      --muted: #7f8c8d;
+      --border: #2c3e50;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #header {
+      background: var(--panel);
+      padding: 8px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    #header h1 { font-size: 14px; font-weight: 700; color: var(--gold); white-space: nowrap; }
+    #score-panel { display: flex; gap: 10px; align-items: center; font-size: 12px; }
+    .score-item { display: flex; flex-direction: column; align-items: center; }
+    .score-label { color: var(--muted); font-size: 10px; }
+    .score-val { font-weight: 700; font-size: 14px; }
+    .score-val.wins { color: var(--green); }
+    .score-val.losses { color: var(--accent); }
+    #target-label {
+      background: var(--accent);
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    #controls {
+      background: var(--panel);
+      padding: 6px 10px;
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    button {
+      background: var(--border);
+      color: var(--text);
+      border: 1px solid #3d5166;
+      border-radius: 8px;
+      padding: 6px 10px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.15s;
+      -webkit-tap-highlight-color: transparent;
+      white-space: nowrap;
+    }
+    button:active { background: #3d5166; }
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      font-weight: 700;
+    }
+    button.active { background: var(--gold); color: #000; border-color: var(--gold); }
+    #mode-indicator {
+      font-size: 11px;
+      color: var(--gold);
+      padding: 4px 8px;
+      border: 1px solid var(--gold);
+      border-radius: 6px;
+    }
+    #game-area {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      position: relative;
+      touch-action: none;
+    }
+    #canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      touch-action: none;
+    }
+    #overlay {
+      position: absolute;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.7);
+      z-index: 10;
+    }
+    #overlay.show { display: flex; }
+    #result-box {
+      background: var(--panel);
+      border: 2px solid var(--gold);
+      border-radius: 16px;
+      padding: 24px 32px;
+      text-align: center;
+      max-width: 300px;
+    }
+    #result-title { font-size: 28px; margin-bottom: 8px; }
+    #result-desc { font-size: 14px; color: var(--muted); margin-bottom: 16px; }
+    #result-close {
+      background: var(--gold);
+      color: #000;
+      font-weight: 700;
+      font-size: 14px;
+      padding: 10px 24px;
+      border: none;
+      border-radius: 10px;
+    }
+    #settings-panel {
+      position: absolute;
+      top: 0; right: 0;
+      background: var(--panel);
+      border-left: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 12px;
+      width: 220px;
+      z-index: 5;
+      display: none;
+      border-radius: 0 0 0 12px;
+    }
+    #settings-panel.show { display: block; }
+    #settings-panel h3 { margin-bottom: 10px; font-size: 13px; color: var(--gold); }
+    .setting-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 12px; }
+    .setting-row label { color: var(--muted); }
+    .setting-row input[type=range] { width: 90px; }
+    .setting-row input[type=checkbox] { width: 16px; height: 16px; }
+    #selection-rect {
+      position: absolute;
+      border: 2px dashed var(--gold);
+      background: rgba(245,166,35,0.1);
+      pointer-events: none;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+<div id="header">
+  <h1>🔺 Треугольный Квинкункс</h1>
+  <div id="target-label">Цель: —</div>
+  <div id="score-panel">
+    <div class="score-item"><span class="score-label">Победы</span><span class="score-val wins" id="wins">0</span></div>
+    <div class="score-item"><span class="score-label">Поражения</span><span class="score-val losses" id="losses">0</span></div>
+  </div>
+</div>
+
+<div id="controls">
+  <button class="primary" id="btn-launch">▶ Пуск</button>
+  <button id="btn-new-round">🔄 Новый раунд</button>
+  <button id="btn-reset-pegs">↺ Сброс штырьков</button>
+  <button id="btn-mode" class="active">Режим: одиночный</button>
+  <button id="btn-row-col">Захват: ряд</button>
+  <button id="btn-settings">⚙</button>
+</div>
+
+<div id="game-area">
+  <canvas id="canvas"></canvas>
+  <div id="selection-rect"></div>
+  <div id="overlay">
+    <div id="result-box">
+      <div id="result-title">🏆</div>
+      <div id="result-desc"></div>
+      <button id="result-close">Продолжить</button>
+    </div>
+  </div>
+  <div id="settings-panel">
+    <h3>⚙ Настройки</h3>
+    <div class="setting-row"><label>Шариков: <span id="ball-count-val">2000</span></label><input type="range" id="ball-count" min="200" max="5000" step="200" value="2000"></div>
+    <div class="setting-row"><label>Угол/клик: <span id="step-angle-val">15°</span></label><input type="range" id="step-angle" min="5" max="45" step="5" value="15"></div>
+    <div class="setting-row"><label>Секций: <span id="bins-val">9</span></label><input type="range" id="bins-count" min="5" max="13" step="2" value="9"></div>
+    <div class="setting-row"><label>Рядов: <span id="rows-val">12</span></label><input type="range" id="rows-count" min="6" max="16" step="1" value="12"></div>
+    <div class="setting-row"><label>Сохранять повороты</label><input type="checkbox" id="keep-rotations"></div>
+    <div class="setting-row"><label>Пилотные шарики</label><input type="checkbox" id="show-pilots" checked></div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// TRIANGLE QUINCUNX PWA
+// Physics: probability transition matrix through pegs
+// Each peg deflects ball L/R based on its rotation angle
+// ============================================================
+
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+// ---- State ----
+const S = {
+  rows: 12,
+  bins: 9,
+  ballCount: 2000,
+  stepAngle: 15,
+  maxAngle: 270,
+  pegs: [],          // [row][col] = rotation angle degrees
+  distribution: [],  // final ball counts per bin
+  targetBin: 0,
+  wins: 0,
+  losses: 0,
+  phase: 'setup',   // setup | running | done
+  mode: 'single',   // single | batch
+  rowColMode: 'row',
+  keepRotations: false,
+  showPilots: true,
+  pilots: [],        // animated pilot balls
+  pilotsDone: false,
+};
+
+// ---- Layout ----
+const L = {
+  topZone: 0.12,   // fraction of height for ball reservoir
+  pegZone: 0.68,
+  binZone: 0.20,
+  pegR: 14,        // approx hit radius
+  selStart: null,
+  selEnd: null,
+  selecting: false,
+  batchCapture: false,  // row/col capture mode active
+};
+
+let animFrame = null;
+let pilotAnimFrame = null;
+
+// ---- Init ----
+function initPegs() {
+  S.pegs = [];
+  for (let r = 0; r < S.rows; r++) {
+    const cols = r + 1;
+    S.pegs.push(new Array(cols).fill(0));
+  }
+}
+
+function newRound() {
+  S.distribution = new Array(S.bins).fill(0);
+  S.targetBin = Math.floor(Math.random() * S.bins);
+  S.phase = 'setup';
+  S.pilots = [];
+  S.pilotsDone = false;
+  if (!S.keepRotations) initPegs();
+  updateTargetLabel();
+  cancelAnimationFrame(pilotAnimFrame);
+  draw();
+}
+
+function updateTargetLabel() {
+  document.getElementById('target-label').textContent = `Цель: секция ${S.targetBin + 1}`;
+}
+
+// ---- Geometry helpers ----
+function getPegLayout() {
+  const W = canvas.width;
+  const H = canvas.height;
+  const topH = H * L.topZone;
+  const pegH = H * L.pegZone;
+  const binH = H * L.binZone;
+  const pegAreaTop = topH;
+  const pegAreaBottom = topH + pegH;
+
+  // Distribute pegs within pegH
+  const rowSpacing = pegH / (S.rows + 1);
+  const pegSize = Math.min(rowSpacing * 0.55, 18);
+
+  const positions = [];
+  for (let r = 0; r < S.rows; r++) {
+    const cols = r + 1;
+    const y = pegAreaTop + rowSpacing * (r + 1);
+    const totalWidth = W * 0.8;
+    const colSpacing = cols > 1 ? totalWidth / cols : 0;
+    const startX = W * 0.1 + (cols > 1 ? colSpacing / 2 : totalWidth / 2);
+    const row = [];
+    for (let c = 0; c < cols; c++) {
+      const x = startX + c * colSpacing;
+      row.push({ x, y, size: pegSize });
+    }
+    positions.push(row);
+  }
+  return { positions, topH, pegH, binH, pegAreaTop, pegAreaBottom, W, H, rowSpacing };
+}
+
+function getBinLayout(geo) {
+  const { W, H, binH } = geo;
+  const binTop = H - binH;
+  const binW = W / S.bins;
+  const bins = [];
+  for (let i = 0; i < S.bins; i++) {
+    bins.push({ x: i * binW, y: binTop, w: binW, h: binH });
+  }
+  return bins;
+}
+
+// ---- Draw ----
+function drawTriangle(x, y, size, angle, isHighlighted) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate((angle * Math.PI) / 180);
+  const h = size * 1.1;
+  const hw = size * 0.7;
+  ctx.beginPath();
+  ctx.moveTo(0, -h * 0.6);
+  ctx.lineTo(-hw, h * 0.4);
+  ctx.lineTo(hw, h * 0.4);
+  ctx.closePath();
+  ctx.fillStyle = isHighlighted ? '#e94560' : '#4a90d9';
+  ctx.fill();
+  ctx.strokeStyle = isHighlighted ? '#ff8fa3' : '#7ab8f5';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  // Rotation indicator dot
+  ctx.beginPath();
+  ctx.arc(0, -h * 0.35, 2, 0, Math.PI * 2);
+  ctx.fillStyle = '#fff';
+  ctx.fill();
+  ctx.restore();
+}
+
+function drawReservoir(geo) {
+  const { W, topH } = geo;
+  const centerX = W / 2;
+  // Funnel
+  ctx.beginPath();
+  ctx.moveTo(W * 0.2, 0);
+  ctx.lineTo(centerX - 15, topH * 0.85);
+  ctx.lineTo(centerX + 15, topH * 0.85);
+  ctx.lineTo(W * 0.8, 0);
+  ctx.closePath();
+  ctx.fillStyle = 'rgba(74,144,217,0.15)';
+  ctx.fill();
+  ctx.strokeStyle = '#4a90d9';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  // Ball count display
+  const total = S.ballCount;
+  ctx.fillStyle = '#4a90d9';
+  ctx.font = `bold ${Math.min(18, W / 25)}px -apple-system, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.fillText(`${total} шариков`, centerX, topH * 0.45);
+  // Small circles representing balls
+  for (let i = 0; i < Math.min(80, total); i++) {
+    const px = W * 0.22 + Math.random() * W * 0.56;
+    const py = topH * 0.1 + Math.random() * topH * 0.55;
+    ctx.beginPath();
+    ctx.arc(px, py, 2, 0, Math.PI * 2);
+    ctx.fillStyle = `hsla(${200 + Math.random() * 40}, 70%, 65%, 0.7)`;
+    ctx.fill();
+  }
+}
+
+function drawBins(geo, bins) {
+  const maxCount = Math.max(...S.distribution, 1);
+  bins.forEach((b, i) => {
+    const isTarget = i === S.targetBin;
+    const count = S.distribution[i] || 0;
+    const fillH = (count / maxCount) * b.h * 0.85;
+    // Border
+    ctx.strokeStyle = isTarget ? '#e94560' : '#2c3e50';
+    ctx.lineWidth = isTarget ? 2.5 : 1;
+    ctx.strokeRect(b.x + 1, b.y, b.w - 2, b.h);
+    // Fill bar
+    if (count > 0) {
+      const isWinner = isTarget && S.phase === 'done' && count > Math.max(...S.distribution.filter((_, j) => j !== i));
+      ctx.fillStyle = isWinner ? 'rgba(15,155,88,0.6)' : isTarget ? 'rgba(233,69,96,0.5)' : 'rgba(74,144,217,0.4)';
+      ctx.fillRect(b.x + 2, b.y + b.h - fillH, b.w - 4, fillH);
+    }
+    // Target highlight
+    if (isTarget) {
+      ctx.fillStyle = 'rgba(233,69,96,0.12)';
+      ctx.fillRect(b.x + 1, b.y, b.w - 2, b.h);
+      ctx.fillStyle = '#e94560';
+      ctx.font = `bold 10px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText('★', b.x + b.w / 2, b.y + 12);
+    }
+    // Count label
+    if (count > 0) {
+      ctx.fillStyle = '#eaeaea';
+      ctx.font = `${Math.min(11, b.w * 0.35)}px sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText(count, b.x + b.w / 2, b.y + b.h - 4);
+    }
+    // Bin number
+    ctx.fillStyle = '#7f8c8d';
+    ctx.font = '9px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(i + 1, b.x + b.w / 2, geo.H - 2);
+  });
+}
+
+function drawPilots(geo) {
+  S.pilots.forEach(p => {
+    if (!p.done) {
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 4, 0, Math.PI * 2);
+      ctx.fillStyle = `hsla(${p.hue}, 80%, 65%, 0.9)`;
+      ctx.fill();
+    }
+  });
+}
+
+function draw() {
+  const W = canvas.width;
+  const H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  // Background
+  ctx.fillStyle = '#1a1a2e';
+  ctx.fillRect(0, 0, W, H);
+
+  const geo = getPegLayout();
+  const bins = getBinLayout(geo);
+
+  drawReservoir(geo);
+
+  // Separator line
+  ctx.strokeStyle = '#2c3e50';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, geo.topH);
+  ctx.lineTo(W, geo.topH);
+  ctx.stroke();
+
+  // Pegs
+  geo.positions.forEach((row, r) => {
+    row.forEach((p, c) => {
+      drawTriangle(p.x, p.y, p.size, S.pegs[r][c], false);
+    });
+  });
+
+  // Bin separators
+  ctx.strokeStyle = '#2c3e50';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(0, H - geo.binH);
+  ctx.lineTo(W, H - geo.binH);
+  ctx.stroke();
+
+  drawBins(geo, bins);
+  drawPilots(geo);
+
+  // Selection rect (DOM overlay used instead)
+}
+
+// ---- Physics: Transition matrix ----
+// Each row r has r+1 pegs and r+2 possible "slots" between/outside pegs.
+// We model probability mass flowing through slots.
+// A peg at position c in row r deflects incoming ball from slot c or c+1
+// based on rotation angle: positive angle (CCW) biases left.
+function computeDistribution() {
+  const bins = S.bins;
+  // Map final peg slots to bins
+  // Last row has S.rows pegs => S.rows+1 exit slots
+  // We map these to S.bins by folding
+  const exitSlots = S.rows + 1;
+
+  // Build probability vector over exit slots
+  // Start: all probability at slot 0 of row 0 (center slot)
+  // Actually start with single entry point at center
+  let prob = new Array(exitSlots).fill(0);
+
+  // We propagate row by row
+  // Row r: r+1 pegs, r+2 slots
+  // Slot j in row r feeds into slot j and j+1 in row r+1 via peg j and j-1
+  // Simplified: each slot j propagates through peg row
+  // Init prob at entry (top)
+  let currentProb = [1.0]; // 1 slot at entry (just funnel)
+
+  for (let r = 0; r < S.rows; r++) {
+    const nextSlots = r + 2; // row r has r+1 pegs, so r+2 slots
+    const nextProb = new Array(nextSlots).fill(0);
+    // currentProb has r+1 values (slots entering row r)
+    // But row 0 has 1 peg, so 2 exit slots
+    // row r has r+1 pegs, r+2 exit slots
+    // incoming slots = r+1
+    // Each incoming slot i hits peg i (for i < r+1 pegs)
+    // Peg deflection: angle in degrees, positive = CCW = bias left
+    // pL = 0.5 + bias, pR = 0.5 - bias, bias clamped [-0.45, 0.45]
+    for (let i = 0; i < currentProb.length; i++) {
+      if (currentProb[i] < 1e-10) continue;
+      // Each incoming slot goes to peg at position i in row r
+      // (slot i is between peg i-1 and peg i, simplified: hits peg i)
+      const pegIdx = Math.min(i, r); // peg index in row
+      const angle = S.pegs[r][pegIdx]; // rotation in degrees
+      // CCW rotation biases ball to the LEFT
+      const bias = (angle / 180) * 0.45;
+      const pL = Math.max(0.05, Math.min(0.95, 0.5 + bias));
+      const pR = 1 - pL;
+      nextProb[i] += currentProb[i] * pL;       // left exit
+      nextProb[i + 1] += currentProb[i] * pR;   // right exit
+    }
+    currentProb = nextProb;
+  }
+
+  // Map exitSlots to S.bins
+  const result = new Array(S.bins).fill(0);
+  const scale = (exitSlots - 1) / (bins - 1);
+  currentProb.forEach((p, i) => {
+    const binIdx = Math.round(i / scale);
+    result[Math.min(Math.max(binIdx, 0), bins - 1)] += p;
+  });
+  // Normalize
+  const total = result.reduce((a, b) => a + b, 0);
+  S.distribution = result.map(v => Math.round((v / total) * S.ballCount));
+  // Fix rounding: adjust last bin
+  const diff = S.ballCount - S.distribution.reduce((a, b) => a + b, 0);
+  S.distribution[S.bins - 1] += diff;
+}
+
+// ---- Pilot ball animation ----
+function launchPilots(geo) {
+  if (!S.showPilots) {
+    S.pilotsDone = true;
+    return;
+  }
+  S.pilots = [];
+  const N = 12; // number of pilot balls
+  for (let i = 0; i < N; i++) {
+    S.pilots.push({
+      x: canvas.width / 2 + (Math.random() - 0.5) * 20,
+      y: geo.topH * 0.9,
+      vx: (Math.random() - 0.5) * 1,
+      vy: 1.5 + Math.random() * 1,
+      hue: 30 + i * 15,
+      row: 0,
+      done: false,
+      binTarget: weightedRandom(S.distribution),
+    });
+  }
+
+  function weightedRandom(dist) {
+    const total = dist.reduce((a, b) => a + b, 0);
+    let r = Math.random() * total;
+    for (let i = 0; i < dist.length; i++) {
+      r -= dist[i];
+      if (r <= 0) return i;
+    }
+    return dist.length - 1;
+  }
+
+  const bins = getBinLayout(geo);
+
+  function step() {
+    let anyAlive = false;
+    S.pilots.forEach(p => {
+      if (p.done) return;
+      anyAlive = true;
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.15;
+      // Steer toward target bin x
+      const tb = bins[p.binTarget];
+      const tx = tb.x + tb.w / 2;
+      const dx = tx - p.x;
+      p.vx += dx * 0.008;
+      p.vx *= 0.92;
+      if (p.y > canvas.height - 10) { p.done = true; return; }
+    });
+    draw();
+    if (anyAlive) {
+      pilotAnimFrame = requestAnimationFrame(step);
+    } else {
+      S.pilotsDone = true;
+      checkResult();
+    }
+  }
+  pilotAnimFrame = requestAnimationFrame(step);
+}
+
+// ---- Launch simulation ----
+function launch() {
+  if (S.phase === 'running') return;
+  S.phase = 'running';
+  document.getElementById('btn-launch').disabled = true;
+  computeDistribution();
+  const geo = getPegLayout();
+  draw();
+  if (S.showPilots) {
+    launchPilots(geo);
+  } else {
+    S.phase = 'done';
+    document.getElementById('btn-launch').disabled = false;
+    checkResult();
+    draw();
+  }
+}
+
+function checkResult() {
+  S.phase = 'done';
+  document.getElementById('btn-launch').disabled = false;
+  const target = S.distribution[S.targetBin];
+  const others = S.distribution.filter((_, i) => i !== S.targetBin);
+  const maxOther = Math.max(...others);
+  const win = target > maxOther;
+  if (win) S.wins++; else S.losses++;
+  document.getElementById('wins').textContent = S.wins;
+  document.getElementById('losses').textContent = S.losses;
+  const overlay = document.getElementById('overlay');
+  document.getElementById('result-title').textContent = win ? '🏆 Победа!' : '💔 Поражение';
+  document.getElementById('result-desc').textContent = win
+    ? `Секция ${S.targetBin + 1} набрала ${target} шариков — больше всех!`
+    : `Секция ${S.targetBin + 1} набрала ${target}, но максимум в другой (${maxOther}).`;
+  overlay.classList.add('show');
+  draw();
+}
+
+// ---- Hit test ----
+function pegAtPoint(cx, cy) {
+  const geo = getPegLayout();
+  for (let r = 0; r < S.rows; r++) {
+    for (let c = 0; c < geo.positions[r].length; c++) {
+      const p = geo.positions[r][c];
+      const dx = cx - p.x, dy = cy - p.y;
+      if (Math.sqrt(dx * dx + dy * dy) < p.size * 1.4) {
+        return { r, c };
+      }
+    }
+  }
+  return null;
+}
+
+function pegsInRect(x1, y1, x2, y2) {
+  const minX = Math.min(x1, x2), maxX = Math.max(x1, x2);
+  const minY = Math.min(y1, y2), maxY = Math.max(y1, y2);
+  const geo = getPegLayout();
+  const result = [];
+  for (let r = 0; r < S.rows; r++) {
+    for (let c = 0; c < geo.positions[r].length; c++) {
+      const p = geo.positions[r][c];
+      if (p.x >= minX && p.x <= maxX && p.y >= minY && p.y <= maxY) {
+        result.push({ r, c });
+      }
+    }
+  }
+  return result;
+}
+
+function rotatePeg(r, c, angle) {
+  const newAngle = S.pegs[r][c] + angle;
+  if (Math.abs(newAngle) <= S.maxAngle) {
+    S.pegs[r][c] = newAngle;
+  } else {
+    S.pegs[r][c] = S.maxAngle * Math.sign(newAngle);
+  }
+}
+
+function rotateRow(r, angle) {
+  for (let c = 0; c < S.pegs[r].length; c++) rotatePeg(r, c, angle);
+}
+
+function rotateCol(c, angle) {
+  for (let r = c; r < S.rows; r++) {
+    if (c < S.pegs[r].length) rotatePeg(r, c, angle);
+  }
+}
+
+// ---- Pointer events ----
+let pointerDownPos = null;
+let longPressTimer = null;
+let twoFingerStart = null;
+const LONG_PRESS_MS = 600;
+
+function canvasCoords(e) {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return { x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY };
+}
+
+// Touch tracking for two-finger swipe
+let activeTouches = {};
+
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  Array.from(e.changedTouches).forEach(t => { activeTouches[t.identifier] = { x: t.clientX, y: t.clientY }; });
+  if (e.touches.length === 1) {
+    const t = e.touches[0];
+    const pos = canvasCoords(t);
+    pointerDownPos = pos;
+    // Long press
+    longPressTimer = setTimeout(() => {
+      initPegs();
+      draw();
+      showToast('Повороты сброшены');
+    }, LONG_PRESS_MS);
+    // Check batch row/col capture mode
+    if (S.mode === 'batch' && L.batchCapture) {
+      const hit = pegAtPoint(pos.x, pos.y);
+      if (hit) {
+        if (S.rowColMode === 'row') rotateRow(hit.r, S.stepAngle);
+        else rotateCol(hit.c, S.stepAngle);
+        draw();
+        clearTimeout(longPressTimer);
+      }
+    } else if (S.mode === 'batch') {
+      L.selStart = pos;
+      L.selEnd = pos;
+      L.selecting = true;
+    } else {
+      // single mode handled on touchend
+    }
+  } else if (e.touches.length === 2) {
+    clearTimeout(longPressTimer);
+    L.selecting = false;
+    hideSelectionRect();
+    twoFingerStart = {
+      x1: e.touches[0].clientX,
+      y1: e.touches[0].clientY,
+      x2: e.touches[1].clientX,
+      y2: e.touches[1].clientY,
+    };
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  e.preventDefault();
+  if (e.touches.length === 2 && twoFingerStart) {
+    // Two-finger horizontal swipe -> rotate columns
+    const dx1 = e.touches[0].clientX - twoFingerStart.x1;
+    const dx2 = e.touches[1].clientX - twoFingerStart.x2;
+    const avgDx = (dx1 + dx2) / 2;
+    if (Math.abs(avgDx) > 15) {
+      const angle = avgDx > 0 ? S.stepAngle : -S.stepAngle;
+      for (let r = 0; r < S.rows; r++) {
+        for (let c = 0; c < S.pegs[r].length; c++) rotatePeg(r, c, angle);
+      }
+      twoFingerStart = { x1: e.touches[0].clientX, y1: e.touches[0].clientY, x2: e.touches[1].clientX, y2: e.touches[1].clientY };
+      draw();
+    }
+    return;
+  }
+  if (e.touches.length === 1 && L.selecting && S.mode === 'batch') {
+    const t = e.touches[0];
+    const rect = canvas.getBoundingClientRect();
+    L.selEnd = { x: (t.clientX - rect.left) * (canvas.width / rect.width), y: (t.clientY - rect.top) * (canvas.height / rect.height) };
+    showSelectionRect();
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+  e.preventDefault();
+  clearTimeout(longPressTimer);
+  if (e.touches.length < 2) twoFingerStart = null;
+  if (e.changedTouches.length === 1 && e.touches.length === 0) {
+    const t = e.changedTouches[0];
+    if (L.selecting && S.mode === 'batch') {
+      L.selecting = false;
+      hideSelectionRect();
+      const selected = pegsInRect(L.selStart.x, L.selStart.y, L.selEnd.x, L.selEnd.y);
+      if (selected.length > 0) selected.forEach(({ r, c }) => rotatePeg(r, c, S.stepAngle));
+      else {
+        // tap in batch mode without drag - single peg
+        const pos = canvasCoords(t);
+        const hit = pegAtPoint(pos.x, pos.y);
+        if (hit) rotatePeg(hit.r, hit.c, S.stepAngle);
+      }
+      draw();
+    } else if (S.mode === 'single') {
+      const pos = canvasCoords(t);
+      const hit = pegAtPoint(pos.x, pos.y);
+      if (hit) { rotatePeg(hit.r, hit.c, S.stepAngle); draw(); }
+    }
+  }
+  Array.from(e.changedTouches).forEach(t => delete activeTouches[t.identifier]);
+}, { passive: false });
+
+// Mouse events
+let mouseDown = false;
+let mouseSelecting = false;
+
+canvas.addEventListener('mousedown', e => {
+  const pos = canvasCoords(e);
+  pointerDownPos = pos;
+  mouseDown = true;
+  if (S.mode === 'batch' && !L.batchCapture) {
+    L.selStart = pos;
+    L.selEnd = pos;
+    mouseSelecting = true;
+    L.selecting = true;
+  }
+  longPressTimer = setTimeout(() => {
+    initPegs();
+    draw();
+    showToast('Повороты сброшены');
+  }, LONG_PRESS_MS);
+});
+
+canvas.addEventListener('mousemove', e => {
+  if (!mouseDown) return;
+  const pos = canvasCoords(e);
+  if (mouseSelecting && S.mode === 'batch') {
+    L.selEnd = pos;
+    showSelectionRect();
+  }
+});
+
+canvas.addEventListener('mouseup', e => {
+  clearTimeout(longPressTimer);
+  mouseDown = false;
+  const pos = canvasCoords(e);
+  if (mouseSelecting && S.mode === 'batch') {
+    mouseSelecting = false;
+    L.selecting = false;
+    hideSelectionRect();
+    const selected = pegsInRect(L.selStart.x, L.selStart.y, pos.x, pos.y);
+    if (selected.length > 0) selected.forEach(({ r, c }) => rotatePeg(r, c, S.stepAngle));
+    else {
+      const hit = pegAtPoint(pos.x, pos.y);
+      if (hit) rotatePeg(hit.r, hit.c, S.stepAngle);
+    }
+    draw();
+  } else if (S.mode === 'single' || L.batchCapture) {
+    const hit = pegAtPoint(pos.x, pos.y);
+    if (hit) {
+      if (L.batchCapture) {
+        if (S.rowColMode === 'row') rotateRow(hit.r, S.stepAngle);
+        else rotateCol(hit.c, S.stepAngle);
+      } else {
+        rotatePeg(hit.r, hit.c, S.stepAngle);
+      }
+      draw();
+    }
+  }
+});
+
+function showSelectionRect() {
+  const rect = canvas.getBoundingClientRect();
+  const scaleX = rect.width / canvas.width;
+  const scaleY = rect.height / canvas.height;
+  const x1 = Math.min(L.selStart.x, L.selEnd.x) * scaleX + rect.left;
+  const y1 = Math.min(L.selStart.y, L.selEnd.y) * scaleY + rect.top;
+  const w = Math.abs(L.selEnd.x - L.selStart.x) * scaleX;
+  const h = Math.abs(L.selEnd.y - L.selStart.y) * scaleY;
+  const el = document.getElementById('selection-rect');
+  el.style.display = 'block';
+  el.style.left = x1 + 'px';
+  el.style.top = y1 + 'px';
+  el.style.width = w + 'px';
+  el.style.height = h + 'px';
+}
+
+function hideSelectionRect() {
+  document.getElementById('selection-rect').style.display = 'none';
+}
+
+function showToast(msg) {
+  let t = document.getElementById('toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toast';
+    Object.assign(t.style, {
+      position: 'fixed', bottom: '80px', left: '50%', transform: 'translateX(-50%)',
+      background: 'rgba(0,0,0,0.8)', color: '#fff', padding: '8px 18px',
+      borderRadius: '20px', fontSize: '13px', zIndex: '100', pointerEvents: 'none'
+    });
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => { t.style.opacity = '0'; }, 1800);
+}
+
+// ---- Button handlers ----
+document.getElementById('btn-launch').addEventListener('click', () => {
+  if (S.phase !== 'setup') return;
+  launch();
+});
+
+document.getElementById('btn-new-round').addEventListener('click', () => {
+  cancelAnimationFrame(pilotAnimFrame);
+  newRound();
+});
+
+document.getElementById('btn-reset-pegs').addEventListener('click', () => {
+  initPegs();
+  draw();
+  showToast('Повороты сброшены');
+});
+
+document.getElementById('btn-mode').addEventListener('click', () => {
+  S.mode = S.mode === 'single' ? 'batch' : 'single';
+  L.batchCapture = false;
+  const btn = document.getElementById('btn-mode');
+  btn.textContent = S.mode === 'single' ? 'Режим: одиночный' : 'Режим: пакетный';
+  btn.classList.toggle('active', S.mode === 'batch');
+  document.getElementById('btn-row-col').style.opacity = S.mode === 'batch' ? '1' : '0.4';
+});
+
+document.getElementById('btn-row-col').addEventListener('click', () => {
+  if (S.mode !== 'batch') { showToast('Включите пакетный режим'); return; }
+  L.batchCapture = !L.batchCapture;
+  if (L.batchCapture) {
+    S.rowColMode = S.rowColMode === 'row' ? 'col' : 'row';
+  }
+  const btn = document.getElementById('btn-row-col');
+  btn.textContent = L.batchCapture ? `Захват: ${S.rowColMode === 'row' ? 'ряд' : 'столб.'}` : `Захват: ряд`;
+  btn.classList.toggle('active', L.batchCapture);
+  if (L.batchCapture) showToast(`Нажмите на штырёк для захвата ${S.rowColMode === 'row' ? 'ряда' : 'столбца'}`);
+});
+
+document.getElementById('btn-settings').addEventListener('click', () => {
+  document.getElementById('settings-panel').classList.toggle('show');
+});
+
+document.getElementById('result-close').addEventListener('click', () => {
+  document.getElementById('overlay').classList.remove('show');
+});
+
+// Settings
+document.getElementById('ball-count').addEventListener('input', function() {
+  S.ballCount = +this.value;
+  document.getElementById('ball-count-val').textContent = S.ballCount;
+});
+document.getElementById('step-angle').addEventListener('input', function() {
+  S.stepAngle = +this.value;
+  document.getElementById('step-angle-val').textContent = S.stepAngle + '°';
+});
+document.getElementById('bins-count').addEventListener('input', function() {
+  S.bins = +this.value;
+  document.getElementById('bins-val').textContent = S.bins;
+  S.distribution = new Array(S.bins).fill(0);
+  S.targetBin = Math.floor(Math.random() * S.bins);
+  updateTargetLabel();
+  draw();
+});
+document.getElementById('rows-count').addEventListener('input', function() {
+  S.rows = +this.value;
+  document.getElementById('rows-val').textContent = S.rows;
+  initPegs();
+  draw();
+});
+document.getElementById('keep-rotations').addEventListener('change', function() {
+  S.keepRotations = this.checked;
+});
+document.getElementById('show-pilots').addEventListener('change', function() {
+  S.showPilots = this.checked;
+});
+
+// Close settings on outside click
+document.addEventListener('click', e => {
+  const sp = document.getElementById('settings-panel');
+  if (!sp.contains(e.target) && e.target.id !== 'btn-settings') sp.classList.remove('show');
+});
+
+// ---- Resize ----
+function resize() {
+  const area = document.getElementById('game-area');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = area.clientWidth * dpr;
+  canvas.height = area.clientHeight * dpr;
+  canvas.style.width = area.clientWidth + 'px';
+  canvas.style.height = area.clientHeight + 'px';
+  ctx.scale(dpr, dpr);
+  draw();
+}
+
+window.addEventListener('resize', resize);
+
+// Prevent pull-to-refresh and bounce scroll
+document.body.addEventListener('touchmove', e => {
+  if (e.target === canvas) e.preventDefault();
+}, { passive: false });
+
+// ---- Bootstrap ----
+function init() {
+  initPegs();
+  S.distribution = new Array(S.bins).fill(0);
+  S.targetBin = Math.floor(Math.random() * S.bins);
+  updateTargetLabel();
+  resize();
+}
+
+init();
+</script>
+</body>
+</html>
