@@ -17,7 +17,7 @@ if ('serviceWorker' in navigator) {
 // ── Constants ────────────────────────────────────────────────────────────────
 const ROWS = 12;            // peg rows
 const MAX_ROTATION = 270;   // degrees total per peg
-const PEG_SIZE = 10;        // half-size of triangle (px)
+const PEG_SIZE = 9;         // half-size of triangle (px)
 const PILOT_BALLS = 40;     // number of visually animated balls
 const BALL_RADIUS = 3;
 const COLORS = {
@@ -103,7 +103,7 @@ function resize() {
 function computeZones() {
   // Funnel zone: top 15%
   funnelZone = { y: 0, h: H * 0.15 };
-  // Peg zone: next 50%
+  // Peg zone: next 52%
   pegZone = { y: H * 0.15, h: H * 0.52 };
   // Section zone: bottom 33%
   sectionZone = { y: H * 0.67, h: H * 0.33 };
@@ -112,26 +112,37 @@ function computeZones() {
 // ── Build geometry ────────────────────────────────────────────────────────────
 
 /**
- * Build pegs in a triangular staggered grid.
- * Row i has (i+1) pegs, centered horizontally.
- * pegs[i][j] = peg object
+ * Build pegs in a TRUE pyramid (triangle) layout:
+ *   Row 0 (top)    → 1 peg   (apex)
+ *   Row 1          → 2 pegs
+ *   ...
+ *   Row ROWS-1     → ROWS pegs  (base)
+ *
+ * Horizontal spacing is UNIFORM across all rows:
+ *   All pegs are placed on a grid where the column pitch = baseWidth / ROWS.
+ *   Row r has (r+1) pegs, centered, with that fixed pitch.
+ *   This produces a proper equilateral-triangle lattice (like the image).
  */
 function buildPegs(keepRotations = false) {
-  const prevRotations = keepRotations ? pegs.map(p => ({ row: p.row, col: p.col, rotation: p.rotation })) : [];
+  const prevRotations = keepRotations
+    ? pegs.map(p => ({ row: p.row, col: p.col, rotation: p.rotation }))
+    : [];
 
   pegs = [];
-  const marginX = W * 0.06;
-  const usableW = W - marginX * 2;
-  const rowH = pegZone.h / (ROWS + 1);
+
+  const marginX = W * 0.07;
+  const baseWidth = W - marginX * 2;   // full width used by the bottom row
+  const colPitch  = baseWidth / ROWS;   // fixed horizontal step between pegs
+  const rowH      = pegZone.h / ROWS;  // vertical step between rows
 
   for (let r = 0; r < ROWS; r++) {
-    const cols = r + 1;
-    const spacing = cols > 1 ? usableW / cols : usableW;
-    const startX = marginX + (cols > 1 ? spacing / 2 : usableW / 2);
-    const y = pegZone.y + rowH * (r + 0.8);
+    const cols = r + 1;                          // number of pegs in this row
+    const rowWidth = colPitch * r;               // total span of this row
+    const startX   = W / 2 - rowWidth / 2;      // leftmost peg x (centered)
+    const y = pegZone.y + rowH * (r + 0.5);     // y position of this row
 
     for (let c = 0; c < cols; c++) {
-      const x = cols === 1 ? W / 2 : startX + c * spacing - (cols > 1 ? 0 : 0);
+      const x = startX + c * colPitch;
       let rotation = 0;
       if (keepRotations) {
         const prev = prevRotations.find(p => p.row === r && p.col === c);
@@ -263,39 +274,14 @@ function rotatePeg(peg) {
  */
 function computeDistribution() {
   const finalSlots = ROWS + 1; // 13
-  // prob[slot] = probability of landing in slot after all rows
-  let prob = new Float64Array(finalSlots);
-
-  // All balls start in the single top slot (slot 0 of row 0)
-  // After row 0 (1 peg): slots 0 (left) and 1 (right)
-  // We track probability in slots for each row
-
-  // Start: all probability at center-ish. The funnel sends all balls to column 0 slot only.
-  // Actually slot indices per row: row r has r+2 slots numbered 0..r+1
-  // Ball enters from slot 0 (leftmost, which is center since row 0 has 1 peg).
-  // Actually model: funnel is centered → use a small spread around center.
-  let curProb = new Float64Array(2); // row 0 starts with 1 slot entering peg
-  // We model it slightly differently:
-  // curProb[j] = prob of ball being in gap j before hitting row r
-  // gap j is between peg (j-1) and peg j (boundary conditions at edges)
-  // For row r=0: 1 peg, 2 gaps. Ball comes from funnel → entirely into gap 0 (left) or gap 1 (right)
-  // Funnel centered → equal split initially? No, funnel is narrow → all enter center.
-  // Row 0: 1 peg at center. 2 output gaps. Probability split by peg rotation.
 
   let incoming = new Float64Array(1);
   incoming[0] = 1.0; // 100% enters through 1 funnel opening
 
   for (let r = 0; r < ROWS; r++) {
-    const numPegs = r + 1; // pegs in this row
+    const numPegs = r + 1;
     const rowPegs = pegs.filter(p => p.row === r);
-    // output gaps = numPegs + 1
     const outProb = new Float64Array(numPegs + 1);
-
-    // incoming has numPegs slots (balls enter gaps between/around pegs)
-    // Actually incoming length = numPegs (1 slot per peg input position)
-    // More precisely: row r has r+1 pegs, and the balls enter from r slots above.
-    // Use: incoming[j] = prob arriving at peg j (j=0..numPegs-1)
-    // Each peg j splits ball: leftProb → outGap[j], rightProb → outGap[j+1]
 
     for (let j = 0; j < rowPegs.length; j++) {
       const peg = rowPegs[j];
@@ -303,17 +289,14 @@ function computeDistribution() {
       const leftP = 0.5 + bias;   // CCW rotation → left bias increases
       const rightP = 1 - leftP;
       const p = incoming[j] || 0;
-      outProb[j] += p * leftP;
+      outProb[j]     += p * leftP;
       outProb[j + 1] += p * rightP;
     }
 
-    // For next row: outProb becomes incoming, but next row has numPegs+1 pegs
-    // We need to map outProb (numPegs+1 gaps) → incoming for next row (numPegs+1 pegs)
-    // Each gap feeds the peg at same index: gap j → peg j of next row
     incoming = outProb;
   }
 
-  // incoming now has ROWS+1 = 13 values → map to numSections
+  // Map ROWS+1 slots → numSections
   const result = new Float64Array(numSections);
   const slotsPerSection = finalSlots / numSections;
   for (let i = 0; i < finalSlots; i++) {
@@ -378,9 +361,7 @@ function launchBalls() {
 }
 
 function spawnPilotBall(index) {
-  // Stagger spawn times
   const delay = index * 0.04;
-  // Starting position: funnel center
   pilotBalls.push({
     x: W / 2 + (Math.random() - 0.5) * 8,
     y: funnelZone.y + funnelZone.h * 0.2,
@@ -417,10 +398,8 @@ function updatePilotBalls(dt, dist) {
       const dist2 = dx * dx + dy * dy;
       const minDist = PEG_SIZE + BALL_RADIUS + 2;
       if (dist2 < minDist * minDist) {
-        // Deflect based on peg rotation
         const angle = Math.atan2(dy, dx);
         const pegAngleRad = (peg.rotation * Math.PI) / 180;
-        // CCW rotation pushes left
         const deflection = 0.3 + pegAngleRad * 0.5;
         const speed = Math.sqrt(ball.vx * ball.vx + ball.vy * ball.vy);
         ball.vx = Math.cos(angle - deflection) * speed * 0.7;
@@ -430,14 +409,11 @@ function updatePilotBalls(dt, dist) {
       }
     }
 
-    // Store trail (max 5 points)
+    // Trail
     ball.trail.push({ x: ball.x, y: ball.y });
     if (ball.trail.length > 5) ball.trail.shift();
 
-    // Done when ball reaches section zone bottom
-    if (ball.y > sectionZone.y + sectionZone.h) {
-      ball.done = true;
-    }
+    if (ball.y > sectionZone.y + sectionZone.h) ball.done = true;
   });
 }
 
@@ -463,7 +439,7 @@ function evaluateResult() {
 // ── Peg hit detection ─────────────────────────────────────────────────────────
 
 function pegAtPoint(x, y) {
-  const hitRadius = PEG_SIZE * 2;
+  const hitRadius = PEG_SIZE * 2.2;
   let best = null, bestDist = Infinity;
   for (const peg of pegs) {
     const dx = x - peg.x, dy = y - peg.y;
@@ -498,19 +474,16 @@ function onPointerDown(e) {
   const pos = getCanvasPos(e);
   activePointers.set(e.pointerId, pos);
 
-  // Long press timer → reset all pegs
   longPressTimer = setTimeout(() => {
     longPressTimer = null;
     resetPegs();
   }, LONG_PRESS_MS);
 
   if (rotateMode === 'single') {
-    // Single peg rotation on click
     const peg = pegAtPoint(pos.x, pos.y);
     if (peg) rotatePeg(peg);
     render();
   } else {
-    // Batch mode: start rectangle selection
     selStart = pos;
     selRect = null;
     isDragging = false;
@@ -520,7 +493,7 @@ function onPointerDown(e) {
 function onPointerMove(e) {
   e.preventDefault();
   if (!activePointers.has(e.pointerId)) return;
-  if (activePointers.size > 1) return; // handled by touch events
+  if (activePointers.size > 1) return;
 
   const pos = getCanvasPos(e);
   activePointers.set(e.pointerId, pos);
@@ -543,17 +516,13 @@ function onPointerUp(e) {
 
   if (rotateMode === 'batch') {
     if (isDragging && selRect) {
-      // Rotate all pegs in selection
       pegsInRect(selRect.x1, selRect.y1, selRect.x2, selRect.y2).forEach(rotatePeg);
     } else if (!isDragging && selStart) {
-      // Single tap in batch mode: use capture mode (row/col)
       const peg = pegAtPoint(pos.x, pos.y);
       if (peg) {
         if (captureMode === 'row') {
           pegs.filter(p => p.row === peg.row).forEach(rotatePeg);
         } else {
-          // Column: same relative position in each row
-          // Approximate: pegs with similar x coordinate
           pegs.filter(p => Math.abs(p.x - peg.x) < 20).forEach(rotatePeg);
         }
       }
@@ -589,8 +558,6 @@ function onTouchEnd(e) {
     const dx = lastX - twoFingerStart.x;
 
     if (Math.abs(dx) > 20) {
-      // Horizontal 2-finger swipe: rotate pegs in swept columns
-      const swipeDir = dx > 0 ? 'right' : 'left';
       const centerX = twoFingerStart.x - rect.left;
       const endX = lastX - rect.left;
       const colPegs = pegs.filter(p => {
@@ -598,7 +565,6 @@ function onTouchEnd(e) {
         const maxX = Math.max(centerX, endX);
         return p.x >= minX - 20 && p.x <= maxX + 20;
       });
-      // Rotate by half angleStep for swipe
       colPegs.forEach(p => {
         if (!p.locked) {
           p.rotation = Math.min(p.rotation + angleStep / 2, MAX_ROTATION);
@@ -628,51 +594,52 @@ function render() {
 
 /**
  * Draw funnel zone: cluster of waiting balls + narrow spout.
+ * The spout narrows toward the APEX of the pyramid (top peg).
  */
 function drawFunnel() {
   const cx = W / 2;
   const fH = funnelZone.h;
 
-  // Draw spout (narrowing triangle)
-  const spoutW = 12;
-  ctx.strokeStyle = '#333';
+  // The top peg (apex) is at W/2, so funnel tip points there
+  const spoutW = 10;
+  ctx.strokeStyle = '#2a2a2a';
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.moveTo(cx - W * 0.3, 0);
+  ctx.moveTo(cx - W * 0.28, 0);
   ctx.lineTo(cx - spoutW / 2, fH);
   ctx.stroke();
   ctx.beginPath();
-  ctx.moveTo(cx + W * 0.3, 0);
+  ctx.moveTo(cx + W * 0.28, 0);
   ctx.lineTo(cx + spoutW / 2, fH);
   ctx.stroke();
 
   if (gameState === 'idle') {
-    // Draw ball cluster as a mass of dots
-    const clusterCount = Math.min(ballCount, 500);
+    // Draw ball cluster as a triangular mass of dots (mirror the pyramid)
+    const clusterCount = Math.min(ballCount, 600);
     ctx.fillStyle = COLORS.ball;
-    const seedRng = mulberry32(42); // deterministic for stable visual
+    const seedRng = mulberry32(42);
     for (let i = 0; i < clusterCount; i++) {
-      const bx = cx + (seedRng() - 0.5) * W * 0.55;
-      const by = fH * 0.1 + seedRng() * fH * 0.75;
+      const t  = seedRng();
+      const bx = cx + (seedRng() - 0.5) * W * 0.52 * t;
+      const by = fH * 0.08 + seedRng() * fH * 0.78;
       ctx.beginPath();
       ctx.arc(bx, by, 1.5, 0, Math.PI * 2);
       ctx.fill();
     }
-    // Ball count label
     ctx.fillStyle = '#0ff';
     ctx.font = 'bold 12px Courier New';
     ctx.textAlign = 'center';
-    ctx.fillText(ballCount + ' шаров', cx, fH * 0.5);
+    ctx.fillText(ballCount + ' шаров', cx, fH * 0.48);
   }
 }
 
 /**
  * Draw triangular pegs.
- * Triangle: equilateral, tip pointing up by default.
- * Rotation applied via canvas transform.
+ * Triangle: isoceles, tip pointing up by default.
+ * Rotation applied via canvas transform around peg center.
  */
 function drawPegs() {
-  const s = PEG_SIZE; // half-size
+  const s = PEG_SIZE;
   for (const peg of pegs) {
     ctx.save();
     ctx.translate(peg.x, peg.y);
@@ -686,24 +653,23 @@ function drawPegs() {
       ctx.fillStyle = 'rgba(0,255,255,0.08)';
     } else {
       ctx.strokeStyle = COLORS.peg;
-      ctx.fillStyle = 'rgba(255,255,255,0.05)';
+      ctx.fillStyle = 'rgba(255,255,255,0.04)';
     }
 
     ctx.lineWidth = 1;
     ctx.beginPath();
-    // Isoceles triangle, tip up
-    ctx.moveTo(0, -s);        // top tip
-    ctx.lineTo(s * 0.9, s * 0.7);  // bottom right
-    ctx.lineTo(-s * 0.9, s * 0.7); // bottom left
+    ctx.moveTo(0,       -s);          // apex (top)
+    ctx.lineTo( s * 0.88,  s * 0.65); // bottom-right
+    ctx.lineTo(-s * 0.88,  s * 0.65); // bottom-left
     ctx.closePath();
     ctx.fill();
     ctx.stroke();
 
-    // Rotation indicator dot
+    // Small rotation-indicator dot at apex
     if (peg.rotation > 0 && !peg.locked) {
       ctx.fillStyle = '#0ff';
       ctx.beginPath();
-      ctx.arc(0, -s * 0.4, 1.5, 0, Math.PI * 2);
+      ctx.arc(0, -s * 0.35, 1.5, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -712,7 +678,7 @@ function drawPegs() {
 }
 
 /**
- * Draw bottom sections with ball count bars.
+ * Draw bottom sections with ball count histogram bars.
  */
 function drawSections() {
   const zY = sectionZone.y;
@@ -722,29 +688,24 @@ function drawSections() {
   sections.forEach((sec, i) => {
     const x = sec.x, w = sec.w;
 
-    // Section background
     ctx.fillStyle = sec.isTarget ? COLORS.sectionTarget : COLORS.sectionFill;
     ctx.fillRect(x, zY, w, zH);
 
-    // Border
     ctx.strokeStyle = sec.isTarget ? COLORS.targetBorder : COLORS.sectionBorder;
     ctx.lineWidth = sec.isTarget ? 1.5 : 0.5;
     ctx.strokeRect(x, zY, w, zH);
 
-    // Histogram bar
     if (sec.count > 0) {
       const barH = (sec.count / maxCount) * (zH - 20);
       ctx.fillStyle = sec.isTarget ? COLORS.histTargetBar : COLORS.histBar;
       ctx.fillRect(x + 2, zY + zH - barH - 10, w - 4, barH);
     }
 
-    // Section number label
     ctx.fillStyle = sec.isTarget ? '#0f0' : '#555';
     ctx.font = '10px Courier New';
     ctx.textAlign = 'center';
     ctx.fillText(i + 1, x + w / 2, zY + 12);
 
-    // Ball count
     if (sec.count > 0) {
       ctx.fillStyle = sec.isTarget ? '#0f0' : '#888';
       ctx.font = '9px Courier New';
@@ -763,22 +724,19 @@ function drawSections() {
 }
 
 function drawHistogram() {
-  // Already shown in drawSections via bars
+  // Bars are drawn inline in drawSections()
 }
 
 function drawPilotBalls() {
   for (const ball of pilotBalls) {
     if (!ball.active) continue;
 
-    // Draw trail
     if (ball.trail.length > 1) {
       ctx.strokeStyle = 'rgba(0,200,255,0.2)';
       ctx.lineWidth = 1;
       ctx.beginPath();
       ctx.moveTo(ball.trail[0].x, ball.trail[0].y);
-      for (let i = 1; i < ball.trail.length; i++) {
-        ctx.lineTo(ball.trail[i].x, ball.trail[i].y);
-      }
+      for (let i = 1; i < ball.trail.length; i++) ctx.lineTo(ball.trail[i].x, ball.trail[i].y);
       ctx.stroke();
     }
 
@@ -806,7 +764,7 @@ function drawSelectionRect() {
 
 // ── Utilities ─────────────────────────────────────────────────────────────────
 
-/** Simple deterministic PRNG (Mulberry32) for stable ball cluster visual */
+/** Deterministic PRNG (Mulberry32) for stable ball cluster visual */
 function mulberry32(seed) {
   return function () {
     seed |= 0; seed = seed + 0x6D2B79F5 | 0;
