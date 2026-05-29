@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<!-- Helper page to generate PNG icons. Open in browser, right-click canvas, save as icon-192.png / icon-512.png -->
+<html>
+<head><title>Icon Generator</title></head>
+<body>
+<canvas id="c192" width="192" height="192"></canvas>
+<canvas id="c512" width="512" height="512"></canvas>
+<script>
+function drawIcon(id, size) {
+  const c = document.getElementById(id);
+  const ctx = c.getContext('2d');
+  const s = size;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0,0,s,s);
+  // Draw triangle peg
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = s * 0.03;
+  ctx.fillStyle = 'rgba(0,255,255,0.3)';
+  const cx = s/2, cy = s/2, r = s*0.35;
+  ctx.beginPath();
+  ctx.moveTo(cx, cy - r);
+  ctx.lineTo(cx + r*0.87, cy + r*0.5);
+  ctx.lineTo(cx - r*0.87, cy + r*0.5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // Dots (balls)
+  ctx.fillStyle = '#0ff';
+  for(let i=0;i<6;i++){
+    const bx = cx + (Math.cos(i*1.05)*s*0.2);
+    const by = cy - s*0.3 + Math.sin(i*0.8)*s*0.1;
+    ctx.beginPath();
+    ctx.arc(bx, by, s*0.025, 0, Math.PI*2);
+    ctx.fill();
+  }
+}
+drawIcon('c192',192);
+drawIcon('c512',512);
+</script>
+</body></html>

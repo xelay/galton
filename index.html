@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Quincunx">
+  <meta name="theme-color" content="#000000">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="icon-192.png">
+  <title>Triangle Quincunx</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body {
+      width: 100%; height: 100%;
+      background: #000;
+      color: #fff;
+      font-family: 'Courier New', monospace;
+      overflow: hidden;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+    #app {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      max-width: 520px;
+      margin: 0 auto;
+    }
+    #status-bar {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      padding: 6px 8px;
+      background: #0a0a0a;
+      border-bottom: 1px solid #222;
+      font-size: 11px;
+      flex-shrink: 0;
+    }
+    #status-bar .info { color: #aaa; }
+    #status-bar .target-label { color: #0ff; font-weight: bold; }
+    #status-bar .score { color: #0f0; }
+    button {
+      background: #111;
+      color: #eee;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 4px 8px;
+      font-size: 10px;
+      cursor: pointer;
+      font-family: inherit;
+      touch-action: manipulation;
+    }
+    button:active { background: #222; }
+    button.active { border-color: #0ff; color: #0ff; }
+    button.primary { border-color: #0f0; color: #0f0; }
+    #canvas-wrap {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+    }
+    #canvas {
+      display: block;
+      touch-action: none;
+    }
+    #result-overlay {
+      display: none;
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.7);
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 16px;
+      z-index: 10;
+    }
+    #result-overlay.show { display: flex; }
+    #result-msg {
+      font-size: 28px;
+      font-weight: bold;
+      text-align: center;
+      padding: 0 20px;
+    }
+    #result-msg.win { color: #0f0; text-shadow: 0 0 20px #0f0; }
+    #result-msg.lose { color: #f44; text-shadow: 0 0 20px #f44; }
+    #result-sub { font-size: 14px; color: #aaa; text-align: center; }
+    #settings-row {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      padding: 4px 8px;
+      background: #050505;
+      border-bottom: 1px solid #1a1a1a;
+      flex-shrink: 0;
+      flex-wrap: wrap;
+    }
+    #settings-row label { font-size: 10px; color: #666; }
+    #settings-row select, #settings-row input[type=range] {
+      background: #111; color: #aaa; border: 1px solid #333;
+      border-radius: 3px; font-size: 10px; padding: 2px 4px;
+    }
+    #ball-count-display { font-size: 10px; color: #666; min-width: 30px; }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div id="status-bar">
+    <span class="info">Цель: <span class="target-label" id="target-display">—</span></span>
+    <span class="score">✓<span id="wins">0</span> ✗<span id="losses">0</span></span>
+    <button id="btn-launch" class="primary">▶ Пуск</button>
+    <button id="btn-new-round">↺ Раунд</button>
+    <button id="btn-reset-pegs">⟳ Штырьки</button>
+    <button id="btn-mode" title="Режим поворота">Режим: Один</button>
+    <button id="btn-row-col" title="Ряд/Колонка">Захват: Ряд</button>
+  </div>
+  <div id="settings-row">
+    <label>Шары:</label>
+    <input type="range" id="ball-slider" min="100" max="5000" step="100" value="2000">
+    <span id="ball-count-display">2000</span>
+    <label>Угол/клик:</label>
+    <select id="angle-select">
+      <option value="15" selected>15°</option>
+      <option value="30">30°</option>
+      <option value="45">45°</option>
+    </select>
+    <label>Секции:</label>
+    <select id="sections-select">
+      <option value="7">7</option>
+      <option value="9" selected>9</option>
+      <option value="11">11</option>
+    </select>
+  </div>
+  <div id="canvas-wrap">
+    <canvas id="canvas"></canvas>
+    <div id="result-overlay">
+      <div id="result-msg"></div>
+      <div id="result-sub"></div>
+      <button id="btn-next" style="font-size:14px;padding:8px 20px;">Новый раунд</button>
+    </div>
+  </div>
+</div>
+<script src="main.js"></script>
+</body>
+</html>
